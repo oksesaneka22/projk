@@ -82,20 +82,20 @@ create_admin_user() {
   java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:$INITIAL_ADMIN_PASSWORD groovy = <<EOF
 import jenkins.model.*
 import hudson.security.*
-import hudson.model.*
-import jenkins.install.*
 
 def hudsonRealm = new HudsonPrivateSecurityRealm(false)
 def user = hudsonRealm.createAccount("admin", "admin")  // Change "admin" to desired username/password
 user.save()
 
-// Set authorization strategy
+// Set the security realm
 Jenkins.instance.setSecurityRealm(hudsonRealm)
-Jenkins.instance.setAuthorizationStrategy(new GlobalMatrixAuthorizationStrategy())
+
+// Set a simpler authorization strategy
+Jenkins.instance.setAuthorizationStrategy(new FullControlOnceLoggedInAuthorizationStrategy())
 
 // Grant admin rights to the created user
-Jenkins.instance.getAuthorizationStrategy().add(Jenkins.ADMINISTER, "admin")
 Jenkins.instance.save()
+
 EOF
 
   echo "Admin user created successfully."
