@@ -5,7 +5,7 @@ JENKINS_URL="http://localhost:8080"
 JENKINS_CLI="/var/lib/jenkins/jenkins-cli.jar"
 JENKINS_WAR_URL="https://updates.jenkins-ci.org/download/war/latest/jenkins.war"  # URL for Jenkins WAR file
 PLUGINS=(
-  "folders"
+  "cloudbees-folder"
   "antisamy-markup-formatter"
   "build-timeout"
   "credentials-binding"
@@ -40,8 +40,13 @@ install_jenkins() {
   sudo apt-get install fontconfig openjdk-17-jre -y
   sudo apt-get install jenkins -y
 
-
   echo "Jenkins installation completed."
+}
+
+# Disable Jenkins setup wizard
+disable_setup_wizard() {
+  echo "Disabling Jenkins setup wizard..."
+  sudo sed -i 's/^JAVA_ARGS=.*/JAVA_ARGS="-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false"/' /etc/default/jenkins
 }
 
 # Wait for Jenkins to start
@@ -52,25 +57,59 @@ wait_for_jenkins() {
   sudo systemctl enable jenkins
 }
 
-
-# Function to create the first admin user
+# Function to create the first admin user using Groovy script
 create_admin_user() {
-  # Get Jenkins initial admin password
-  ADMIN_PASSWORD=$(sudo cat /var/lib/jenkins/secrets/initialAdminPassword)
-  echo "Using admin password: $ADMIN_PASSWORD"
-
-  # Download Jenkins CLI if not already downloaded
-  if [ ! -f "$JENKINS_CLI" ]; then
-    wget -q $JENKINS_URL/jnlpJars/jenkins-cli.jar -O $JENKINS_CLI
-  fi
-
-  # Create the admin user using the Jenkins CLI
   echo "Creating the first admin user..."
-  java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:$ADMIN_PASSWORD create-user --username admin --password admin --fullname "Admin" --email "admin@example.com"
+
+  # Jenkins CLI requires the initial admin password, typically stored in /var/lib/jenkins/secrets/initialAdminPassword
+  INITIAL_ADMIN_PASSWORD=$(sudo cat /var/lib/jenkins/secrets/initialAdminPassword)
+
+  # Wait for Jenkins to be available, if not ready yet
+  while ! curl -s $JENKINS_URL > /dev/null; do
+    echo "Waiting for Jenkins to become available..."
+    sleep 5
+  done
+
+  # Run the Groovy script to create the admin user
+  java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:$INITIAL_ADMIN_PASSWORD groovy = <<EOF
+import jenkins.model.*
+import hudson.security.*
+import hudson.model.*
+import jenkins.install.*
+
+def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+def user = hudsonRealm.createAccount("admin", "admin")  // Change "admin" to desired username/password
+user.save()
+
+// Set authorization strategy
+Jenkins.instance.setSecurityRealm(hudsonRealm)
+Jenkins.instance.setAuthorizationStrategy(new GlobalMatrixAuthorizationStrategy())
+
+// Grant admin rights to the created user
+Jenkins.instance.getAuthorizationStrategy().add(Jenkins.ADMINISTER, "admin")
+Jenkins.instance.save()
+EOF
+
+  echo "Admin user created successfully."
+}
+
+# Function to install plugins
+install_plugins() {
+  for plugin in "${PLUGINS[@]}"; do
+    echo "Installing plugin: $plugin"
+    java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:admin install-plugin $plugin || {
+      echo "Failed to install plugin $plugin. Retrying..."
+      sleep 20
+      java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:admin install-plugin $plugin
+    }
+  done
 }
 
 # Install Jenkins
 install_jenkins
+
+# Disable the setup wizard
+disable_setup_wizard
 
 # Wait for Jenkins to initialize
 wait_for_jenkins
@@ -79,17 +118,10 @@ wait_for_jenkins
 create_admin_user
 
 # Install plugins
-for plugin in "${PLUGINS[@]}"; do
-  echo "Installing plugin: $plugin"
-  java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:$ADMIN_PASSWORD install-plugin $plugin || {
-    echo "Failed to install plugin $plugin. Retrying..."
-    sleep 120
-    java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:$ADMIN_PASSWORD install-plugin $plugin
-  }
-done
+install_plugins
 
 # Restart Jenkins to apply changes
 echo "Restarting Jenkins to apply plugin changes..."
-java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:$ADMIN_PASSWORD safe-restart
+java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:admin safe-restart
 
 echo "All plugins installed successfully."
