@@ -83,17 +83,18 @@ create_admin_user() {
 import jenkins.model.*
 import hudson.security.*
 
+// Create the admin user
 def hudsonRealm = new HudsonPrivateSecurityRealm(false)
-def user = hudsonRealm.createAccount("admin", "admin")  // Change "admin" to desired username/password
+def user = hudsonRealm.createAccount("admin", "admin")  // Set your desired username and password
 user.save()
 
 // Set the security realm
 Jenkins.instance.setSecurityRealm(hudsonRealm)
 
-// Set a simpler authorization strategy
+// Use a simpler authorization strategy
 Jenkins.instance.setAuthorizationStrategy(new FullControlOnceLoggedInAuthorizationStrategy())
 
-// Grant admin rights to the created user
+// Save the changes
 Jenkins.instance.save()
 
 EOF
