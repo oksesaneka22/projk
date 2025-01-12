@@ -24,8 +24,8 @@ sudo systemctl enable jenkins
 
 # Wait for Jenkins to start
 echo "Waiting for Jenkins to start..."
-sleep 30
-
+sleep 60
+systemctl status jenkins
 # Get the initial admin password
 ADMIN_PASSWORD=$(sudo cat /var/lib/jenkins/secrets/initialAdminPassword)
 echo "Jenkins initial admin password: $ADMIN_PASSWORD"
