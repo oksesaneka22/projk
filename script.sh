@@ -26,6 +26,14 @@ PLUGINS=(
   "mailer"
 )
 
+# Function to download Jenkins CLI if not already present
+download_jenkins_cli() {
+  if [ ! -f "$JENKINS_CLI" ]; then
+    echo "Downloading Jenkins CLI..."
+    wget -q $JENKINS_URL/jnlpJars/jenkins-cli.jar -O $JENKINS_CLI
+  fi
+}
+
 # Function to install Jenkins
 install_jenkins() {
   echo "Installing Jenkins..."
@@ -99,7 +107,7 @@ install_plugins() {
     echo "Installing plugin: $plugin"
     java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:admin install-plugin $plugin || {
       echo "Failed to install plugin $plugin. Retrying..."
-      sleep 20
+      sleep 120
       java -jar $JENKINS_CLI -s $JENKINS_URL -auth admin:admin install-plugin $plugin
     }
   done
@@ -113,6 +121,9 @@ disable_setup_wizard
 
 # Wait for Jenkins to initialize
 wait_for_jenkins
+
+# Download Jenkins CLI if not present
+download_jenkins_cli
 
 # Create the first admin user
 create_admin_user
