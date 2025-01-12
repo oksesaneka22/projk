@@ -50,7 +50,6 @@ wait_for_jenkins() {
   sleep 60
   sudo systemctl start jenkins
   sudo systemctl enable jenkins
-  systemctl status jenkins
 }
 
 
